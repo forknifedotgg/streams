@@ -1,8 +1,10 @@
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
+const realfs = require('fs');
 const express = require('express')();
 const aws = require('aws-sdk');
 const { fs } = require('memfs');
 
+spawnSync('mkdir', ['-p', './streams'])
 fs.mkdirpSync('./cache')
 
 const invalid = {}
@@ -50,7 +52,7 @@ express.post('/:app/:stream_key', async (req, res) => {
   // on ffprobe output (stderr in this case, acts as stdout), add string data to probeStats
   probe.stderr.on('data', chunk => probeState += chunk.toString())
   // on ffprobe end of output:
-  probe.stderr.on('end', () => {
+  probe.stderr.on('end', async () => {
     // get data and error from verifying the probeStats
     const { data, error } = verifyProbeStats(probeStats)
     /**
@@ -88,11 +90,13 @@ express.post('/:app/:stream_key', async (req, res) => {
  * Manipulate which data to write to the outStream based on events
  */
 async function manageStream(req, outStream) {
-  
+  req.pipe(outStream)
 }
 
 // get connection with load balanced transcoder, send stream details in headers
-async function getWriteStream(req, data) {}
+async function getWriteStream(req, data) {
+  return fs.createWriteStream('./streams' + req.params.stream_key)
+}
 
 // return ffprobe child process
 function ffprobe() {
