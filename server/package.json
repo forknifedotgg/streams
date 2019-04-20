@@ -26,6 +26,7 @@
   "homepage": "https://github.com/forknifedotgg/stream#readme",
   "dependencies": {
     "aws-sdk": "^2.441.0",
-    "express": "^4.16.4"
+    "express": "^4.16.4",
+    "memfs": "^2.15.2"
   }
 }
