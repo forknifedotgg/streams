@@ -1,0 +1,31 @@
+{
+  "name": "forknifedotgg-server",
+  "version": "0.1.0",
+  "description": "Intakes mpegts stream and forwards to available transcoder",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/forknifedotgg/stream.git"
+  },
+  "keywords": [
+    "live",
+    "stream",
+    "ffmpeg",
+    "transcoding",
+    "nodejs",
+    "nginx"
+  ],
+  "author": "Jeremi Gendron",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/forknifedotgg/stream/issues"
+  },
+  "homepage": "https://github.com/forknifedotgg/stream#readme",
+  "dependencies": {
+    "aws-sdk": "^2.441.0",
+    "express": "^4.16.4"
+  }
+}
