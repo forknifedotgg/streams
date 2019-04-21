@@ -33,7 +33,7 @@ express.post('/:app/:key/file.ts', async (req, res) => {
   }
   else {
     setTimeout(() => {
-      req.ffprobe = spawn('ffprobe', ['-i', `./cache/${req.params.key}.ts`, '-hide_banner', '-read_intervals', '%+5', '-loglevel', '38'])
+      req.ffprobe = spawn('ffprobe', ['-i', `./cache/${req.params.key}.ts`, '-hide_banner'])
       req.probe = ''
       req.ffprobe.stderr.on('data', (chunk) => req.probe += chunk.toString())
       req.ffprobe.on('close', (code) => {
