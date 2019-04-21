@@ -1,106 +1,59 @@
 const { spawn, spawnSync } = require('child_process');
-const realfs = require('fs');
+const fs = require('fs');
 const express = require('express')();
 const aws = require('aws-sdk');
-const { fs } = require('memfs');
+const flags = require('./flags')
 
-spawnSync('mkdir', ['-p', './streams'])
-fs.mkdirpSync('./cache')
+spawnSync('mkdir', ['-p', './cache'])
 
 const invalid = {}
-const sessions = {}
 
 express.post('/:app/:stream_key', async (req, res) => {
-  console.log(invalid, sessions)
-  // extract app name and stream key of request incoming from nginx-rtmp tmux
   const { app, stream_key } = req.params
-  // TODO: remove test line below
-  req.on('data', (chunk) => console.log(chunk))
-  // kill connection if already streaming or already invalid key
+
   if (invalid[stream_key] || sessions[stream_key]) { res.end(); return }
 
-  // add session record for stream key
-  sessions[stream_key] = req
+  req.uninitialized = true
+  req.dirty = false
+  req.adding = false
+  req.running = false
 
-  // TODO: move to where data is accessible or leave here if unimportant
-  req.on('close', () => {
-    sessions[stream_key] = null
-    res.end()
-    logStreamEnd(req)
-  })
-  req.on('end', () => {
-    sessions[stream_key] = null
-    res.end()
-    logStreamEnd(req)
+  req.on('data', (chunk) => {
+    for (let i = 0; i < flags.length; i ++) {
+      const { name, callback } = flags[i]
+      if (req[name]) { callback(req, chunk); break }
+    }
   })
 
-  /**
-   * Start caching a small segment for future analysis + keep the readableStream going
-   * Done by piping the request body into an in-memory file named after the stream_key
-   * Attempt to catch error (often trying to write to broken pipe) and log it
-   */
-  const cacheStreamWrite = fs.createWriteStream('./cache/' + stream_key)
-  cacheStreamWrite.on('error', (error) => {
-    console.log('cacheStreamRead error: ', error)
-  })
-  req.pipe(cacheStreamWrite)
-
-  // verify whether the stream key is valid for the purpose of streaming with a db call
-  const error = await verifyStreamKey(stream_key)
-  /**
-   * On error: unlink the in-memory segment, add invalid record for key, log invalid attempt, end connection, delete session connection, return
-   */
+  const { data, error } = await verifyStreamKey(req)
   if (error) {
-    fs.unlink('./cache/' + stream_key)
+    req.verificationError = error
+    req.dirty = true
+    req.uninitialized = false
     invalid[stream_key] = true
-    logInvalidAttempt(req, error)
-    res.end()
-    sessions[stream_key] = null
     return
   }
-
-  // variable to store ffprobe output
-  let probeStats = ''
-  // get ffprobe child process, store in variable
-  const probe = ffprobe()
-  // on ffprobe output (stderr in this case, acts as stdout), add string data to probeStats
-  probe.stderr.on('data', chunk => probeStats += chunk.toString())
-  // on ffprobe end of output:
-  probe.stderr.on('end', async () => {
-    // get data and error from verifying the probeStats
-    const { data, error } = verifyProbeStats(probeStats)
-    console.log(data, error, probeStats)
-    /**
-     * If error with probeStats: unlink in-memory segment, log invalid attempt, end connection, delete session connection
-     */
-    if (error) {
-      fs.unlink('./cache/' + stream_key)
-      logInvalidAttempt(req, error)
-      res.end()
-      sessions[stream_key] = null
-    }
-    else {
-      // Get writeable load balanced connection with transcoding server
-      const outStream = await getWriteStream(req, data)
-      console.log(typeof outStream)
-      // listen for unpipe from in-memory cache write stream
-      cacheStreamWrite.on('unpipe', (src) => {
-        // pass the request and outstream to manageStream
-        manageStream(req, outStream)
+  else {
+    setTimeout(() => {
+      req.ffprobe = spawn('ffprobe', ['-i', 'pipe:0', '-hide_banner', '-read_intervals', '%+4', '-loglevel', '38')
+      req.probe = ''
+      req.ffprobe.stderr.on('data', (chunk) => req.probe += chunk.toString())
+      req.ffprobe.on('close', (code) => {
+        req.probeCode = code
+        const { data, error } = verifyProbe(req)
+        if (error) {
+          req.verificationError = error
+          req.dirty = true
+          req.uninitialized = false
+        }
+        else {
+          req.verificationData = data
+          req.running = true
+          req.uninitialized = false
+        }
       })
-      req.unpipe(cacheStreamWrite)
-      cacheStreamWrite.end()
-    }
-  })
-  // create a read stream from the in-memory segment
-  const cacheStreamRead = fs.createReadStream('./cache/' + stream_key)
-  // catch and log error from writing to broken pipe, etc.
-  cacheStreamRead.on('error', (error) => {
-    console.log('cacheStreamRead error: ', error)
-  })
-  // pipe in-memory segment to ffprobe stdin to trigger the streamcheck
-  // TODO: Can't extract bitrate from this sample + audio channels shows 0
-  cacheStreamRead.pipe(probe.stdin)
+    }, 4000)
+  }
 })
 
 /**
@@ -161,3 +114,17 @@ async function logStreamStart(req, data) {
 async function logStreamEnd(req, data) {}
 
 express.listen(10000)
+
+/**
+  req.on('close', () => {
+    delete sessions[stream_key]
+    res.end()
+    logStreamEnd(req)
+  })
+  req.on('end', () => {
+    delete sessions[stream_key] = null
+    res.end()
+    logStreamEnd(req)
+  })
+
+**/
