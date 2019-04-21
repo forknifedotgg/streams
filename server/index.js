@@ -8,10 +8,8 @@ spawnSync('mkdir', ['-p', './cache'])
 
 const invalid = {}
 
-express.post('/:app/:stream_key', async (req, res) => {
-  const { app, stream_key } = req.params
-
-  if (invalid[stream_key] || sessions[stream_key]) { res.end(); return }
+express.post('/:app/:key/file.ts', async (req, res) => {
+  if (invalid[req.params.key]) { res.end(); return }
 
   req.uninitialized = true
   req.dirty = false
@@ -30,12 +28,12 @@ express.post('/:app/:stream_key', async (req, res) => {
     req.verificationError = error
     req.dirty = true
     req.uninitialized = false
-    invalid[stream_key] = true
+    invalid[req.params.key] = true
     return
   }
   else {
     setTimeout(() => {
-      req.ffprobe = spawn('ffprobe', ['-i', 'pipe:0', '-hide_banner', '-read_intervals', '%+4', '-loglevel', '38')
+      req.ffprobe = spawn('ffprobe', ['-i', 'pipe:0', '-hide_banner', '-read_intervals', '%+4', '-loglevel', '38'])
       req.probe = ''
       req.ffprobe.stderr.on('data', (chunk) => req.probe += chunk.toString())
       req.ffprobe.on('close', (code) => {
@@ -56,30 +54,8 @@ express.post('/:app/:stream_key', async (req, res) => {
   }
 })
 
-/**
- * Open websocket with API server and listen for ad events or other pipe requests
- * Manipulate which data to write to the outStream based on events
- */
-function manageStream(req, outStream) {
-  console.log('managing stream')
-  console.log(req.body)
-  req.on('data', (chunk) => {
-    console.log(chunk)
-  })
-}
-
-// get connection with load balanced transcoder, send stream details in headers
-async function getWriteStream(req, data) {
-  return realfs.createWriteStream('./streams/' + req.params.stream_key + '.ts')
-}
-
-// return ffprobe child process
-function ffprobe() {
-  return spawn('ffprobe', ['-i', 'pipe:0', '-hide_banner', '-read_intervals', '%+4', '-loglevel', '38'])
-}
-
-// check if ffprobe output based on cached stream segment is conformant to our requirements
-function verifyProbeStats(probeStats) {
+function verifyProbe(req) {
+  const probe = req.probe
   return {
     error: null,
     data: {
@@ -99,19 +75,13 @@ function verifyProbeStats(probeStats) {
 
 // verify user table, whether banned or if out of hours etc.
 async function verifyStreamKey(stream_key) {
-  return false
+  return {
+    error: null,
+    data: {
+      streamer: 'fngg'
+    }
+  }
 }
-
-// record request information for stream with invalid key
-async function logInvalidAttempt(req, data) {
-}
-
-// write to database stream details, useful for notifications and data logging
-async function logStreamStart(req, data) {
-
-}
-
-async function logStreamEnd(req, data) {}
 
 express.listen(10000)
 
