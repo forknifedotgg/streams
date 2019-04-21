@@ -33,10 +33,11 @@ express.post('/:app/:key/file.ts', async (req, res) => {
   }
   else {
     setTimeout(() => {
-      req.ffprobe = spawn('ffprobe', ['-i', 'pipe:0', '-hide_banner', '-read_intervals', '%+4', '-loglevel', '38'])
+      req.ffprobe = spawn('ffprobe', ['-i', `./cache/${req.params.key}.ts`, '-hide_banner', '-read_intervals', '%+5', '-loglevel', '38'])
       req.probe = ''
       req.ffprobe.stderr.on('data', (chunk) => req.probe += chunk.toString())
       req.ffprobe.on('close', (code) => {
+        console.log(code, req.probe)
         req.probeCode = code
         const { data, error } = verifyProbe(req)
         if (error) {
@@ -50,7 +51,7 @@ express.post('/:app/:key/file.ts', async (req, res) => {
           req.uninitialized = false
         }
       })
-    }, 4000)
+    }, 5500)
   }
 })
 

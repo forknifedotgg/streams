@@ -25,7 +25,6 @@ module.exports = [
   ]
 
 function uninitialized(req, chunk) {
-  console.log('uninitialized')
   if (req.cache) req.cache.write(chunk)
   else {
     req.cache = fs.createWriteStream(`./cache/${req.params.key}.ts`)
@@ -49,7 +48,6 @@ function adding(req, chunk) {
 }
 
 async function running(req, chunk) {
-  console.log('running')
   if (req.transcoder) req.transcoder.write(chunk)
   else if (req.connecting) return
   else {
